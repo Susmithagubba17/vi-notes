@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Writing Editor</title>
+
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background-color: #f4f6f8;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      margin: 0;
+    }
+
+    .container {
+      background: white;
+      padding: 20px;
+      width: 500px;
+      border-radius: 10px;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+    }
+
+    h2 {
+      text-align: center;
+      margin-bottom: 15px;
+    }
+
+    textarea {
+      width: 100%;
+      height: 150px;
+      padding: 10px;
+      border-radius: 6px;
+      border: 1px solid #ccc;
+      resize: none;
+      font-size: 14px;
+      outline: none;
+    }
+
+    textarea:focus {
+      border-color: #007bff;
+    }
+
+    .buttons {
+      margin-top: 10px;
+      display: flex;
+      justify-content: space-between;
+    }
+
+    button {
+      padding: 8px 15px;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      color: white;
+      font-size: 14px;
+    }
+
+    .save-btn {
+      background-color: #28a745;
+    }
+
+    .view-btn {
+      background-color: #007bff;
+    }
+
+    button:hover {
+      opacity: 0.9;
+    }
+
+    #sessions {
+      margin-top: 15px;
+      max-height: 150px;
+      overflow-y: auto;
+      border-top: 1px solid #ddd;
+      padding-top: 10px;
+    }
+
+    .session-item {
+      background: #f1f1f1;
+      padding: 8px;
+      margin-bottom: 5px;
+      border-radius: 5px;
+      font-size: 13px;
+    }
+
+    .logout-btn {
+  background-color: #dc3545;
+  float: right;
+  margin-bottom: 10px;
+}
+  </style>
+</head>
+
+<body>
+
+<div class="container">
+
+<h2>📝 Writing Editor</h2>
+<button class="logout-btn" onclick="logout()">Logout</button>
+<textarea id="editor" placeholder="Start typing..."></textarea>
+
+<div class="buttons">
+  <button class="save-btn" onclick="saveText()">Save</button>
+  <button class="view-btn" onclick="loadSessions()">View Sessions</button>
+</div>
+
+<div id="sessions"></div>
+
+</div>
+<script>
+if (!localStorage.getItem("token")) {
+    window.location.href = "/login.html";
+}
+</script>
+<script>
+let startTime = null;
+let pasteCount = 0;
+let pastedTextLength = 0;
+
+const editor = document.getElementById("editor");
+
+// Start session
+editor.addEventListener("focus", () => {
+    if (!startTime) {
+        startTime = new Date();
+    }
+});
+
+// Detect paste
+editor.addEventListener("paste", (e) => {
+    const pastedData = e.clipboardData.getData("text");
+
+    pasteCount++;
+    pastedTextLength += pastedData.length;
+
+    console.log("Paste detected");
+});
+
+// Save session
+function saveText() {
+    const text = editor.value;
+
+    if (!startTime) {
+        alert("Click inside editor first!");
+        return;
+    }
+
+    const endTime = new Date();
+    const duration = (endTime - startTime) / 1000;
+
+    fetch('http://localhost:3000/save', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': localStorage.getItem("token")
+        },
+        body: JSON.stringify({
+            content: text,
+            startTime,
+            endTime,
+            duration,
+            pasteCount,
+            pastedTextLength
+        })
+    })
+    .then(res => res.json())
+    .then(data => {
+        alert(data.message);
+
+        // reset
+        startTime = null;
+        pasteCount = 0;
+        pastedTextLength = 0;
+        editor.value = "";
+    });
+}
+
+// Load sessions
+function loadSessions() {
+    fetch('http://localhost:3000/my-sessions', {
+        headers: {
+            'Authorization': localStorage.getItem("token")
+        }
+    })
+    .then(res => res.json())
+    .then(data => {
+        const div = document.getElementById("sessions");
+        div.innerHTML = "";
+
+        data.forEach(session => {
+            const p = document.createElement("div");
+            p.className = "session-item";
+
+            p.innerText = session.content +
+              " (Duration: " + (session.duration ? session.duration.toFixed(2) : 0) + "s, Paste: " + session.pasteCount + ")";
+
+            div.appendChild(p);
+        });
+    });
+}
+
+function logout() {
+    localStorage.removeItem("token");  // ❌ remove token
+
+    alert("Logged out successfully");
+
+    window.location.href = "/login.html"; // 🔁 redirect
+}
+</script>
+
+</body>
+</html>
