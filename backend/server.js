@@ -26,7 +26,7 @@ app.post('/register', async (req, res) => {
         const { username, email, password } = req.body;
 
         const bcrypt = require('bcryptjs');
-        const User = require('./models/User');
+        const User = require('./User');
 
         const hashedPassword = await bcrypt.hash(password, 10);
 
@@ -50,7 +50,7 @@ app.post('/login', async (req, res) => {
     try {
         const { email, password } = req.body;
 
-        const User = require('./models/User');
+        const User = require('./User');
         const bcrypt = require('bcryptjs');
 
         const user = await User.findOne({ email });
@@ -82,7 +82,7 @@ const path = require('path');
 
 app.use(express.static('public'));
 const jwt = require('jsonwebtoken');
-const Text = require('./models/Text');
+const Text = require('./Text');
 
 app.post('/save', async (req, res) => {
     try {
