@@ -150,7 +150,7 @@ function saveText() {
     const endTime = new Date();
     const duration = (endTime - startTime) / 1000;
 
-    fetch('http://localhost:3000/save', {
+    fetch('https://vi-notes-3n44.onrender.com/save', {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
@@ -179,7 +179,7 @@ function saveText() {
 
 // Load sessions
 function loadSessions() {
-    fetch('http://localhost:3000/my-sessions', {
+    fetch('https://vi-notes-3n44.onrender.com/my-sessions', {
         headers: {
             'Authorization': localStorage.getItem("token")
         }
