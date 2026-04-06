@@ -1,8 +1,14 @@
 require('dotenv').config();
 const express = require('express');
+const cors=require('cors');
 const mongoose = require('mongoose');
 
 const app = express();
+app.use(cors({
+  origin: "https://vi-notes-zeta.vercel.app",
+  methods: ["GET", "POST"],
+  allowedHeaders: ["Content-Type"]
+}));
 app.use(express.json());
 
 // Connect MongoDB
