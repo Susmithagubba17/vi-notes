@@ -109,12 +109,12 @@
 <div id="sessions"></div>
 
 </div>
-<script>
+
+    <script>
 if (!localStorage.getItem("token")) {
     window.location.href = "/login.html";
 }
-</script>
-<script>
+
 let startTime = null;
 let pasteCount = 0;
 let pastedTextLength = 0;
@@ -131,84 +131,136 @@ editor.addEventListener("focus", () => {
 // Detect paste
 editor.addEventListener("paste", (e) => {
     const pastedData = e.clipboardData.getData("text");
-
     pasteCount++;
     pastedTextLength += pastedData.length;
-
-    console.log("Paste detected");
 });
 
-// Save session
-function saveText() {
-    const text = editor.value;
+// ================= SAVE ===================
+async function saveText() {
+
+    const text = editor.value.trim();
 
     if (!startTime) {
         alert("Click inside editor first!");
         return;
     }
 
+    const token = localStorage.getItem("token");
+
+    if (!token) {
+        alert("Please login again.");
+        window.location.href = "/login.html";
+        return;
+    }
+
     const endTime = new Date();
     const duration = (endTime - startTime) / 1000;
 
-    fetch('https://vi-notes-3n44.onrender.com/save', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'Authorization':localStorage.getItem("token")
-        },
-        body: JSON.stringify({
-            content: text,
-            startTime,
-            endTime,
-            duration,
-            pasteCount,
-            pastedTextLength
-        })
-    })
-    .then(res => res.json())
-    .then(data => {
-        alert(data.message);
+    try {
 
-        // reset
+        const response = await fetch("https://vi-notes-3n44.onrender.com/save", {
+
+            method: "POST",
+
+            headers: {
+                "Content-Type": "application/json",
+                "Authorization": token
+            },
+
+            body: JSON.stringify({
+                content: text,
+                startTime,
+                endTime,
+                duration,
+                pasteCount,
+                pastedTextLength
+            })
+
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+            alert(data.message || "Save failed");
+            return;
+        }
+
+        alert("Saved Successfully ✅");
+
+        editor.value = "";
         startTime = null;
         pasteCount = 0;
         pastedTextLength = 0;
-        editor.value = "";
-    });
+
+    } catch (err) {
+        console.error(err);
+        alert("Cannot connect to server.");
+    }
 }
 
-// Load sessions
-function loadSessions() {
-    fetch('https://vi-notes-3n44.onrender.com/my-sessions', {
-        headers: {
-            'Authorization': localStorage.getItem("token")
+// ================= VIEW ===================
+async function loadSessions() {
+
+    const token = localStorage.getItem("token");
+
+    try {
+
+        const response = await fetch("https://vi-notes-3n44.onrender.com/my-sessions", {
+
+            method: "GET",
+
+            headers: {
+                "Authorization": token
+            }
+
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+            alert(data.message || "Unable to load sessions");
+            return;
         }
-    })
-    .then(res => res.json())
-    .then(data => {
+
         const div = document.getElementById("sessions");
         div.innerHTML = "";
 
+        if (data.length === 0) {
+            div.innerHTML = "<p>No sessions found.</p>";
+            return;
+        }
+
         data.forEach(session => {
-            const p = document.createElement("div");
-            p.className = "session-item";
 
-            p.innerText = session.content +
-              " (Duration: " + (session.duration ? session.duration.toFixed(2) : 0) + "s, Paste: " + session.pasteCount + ")";
+            const item = document.createElement("div");
+            item.className = "session-item";
 
-            div.appendChild(p);
+            item.innerHTML = `
+                <b>Content:</b> ${session.content}<br>
+                <b>Duration:</b> ${Number(session.duration).toFixed(2)} sec<br>
+                <b>Paste Count:</b> ${session.pasteCount}
+            `;
+
+            div.appendChild(item);
+
         });
-    });
+
+    } catch (err) {
+        console.error(err);
+        alert("Cannot connect to server.");
+    }
 }
 
+// ================= LOGOUT ===================
 function logout() {
-    localStorage.removeItem("token");  // ❌ remove token
+
+    localStorage.removeItem("token");
 
     alert("Logged out successfully");
 
-    window.location.href = "/login.html"; // 🔁 redirect
+    window.location.href = "/login.html";
 }
 </script>
-
+  
 </body>
 </html>
