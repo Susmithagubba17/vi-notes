@@ -1,47 +1,67 @@
 require('dotenv').config();
+
 const express = require('express');
-const cors=require('cors');
+const cors = require('cors');
 const mongoose = require('mongoose');
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
+
+const User = require('./User');
+const Text = require('./Text');
 
 const app = express();
+
+const PORT = process.env.PORT || 3000;
+const JWT_SECRET = process.env.JWT_SECRET || "secretkey";
+
+// =======================
+// Middleware
+// =======================
 app.use(cors({
-  origin: "https://vi-notes-zeta.vercel.app",
-  methods: ["GET", "POST"],
-  allowedHeaders: ["Content-Type"]
+    origin: "https://vi-notes-zeta.vercel.app",
+    methods: ["GET", "POST"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+    credentials: true
 }));
+
 app.use(express.json());
 
-// Connect MongoDB
+// =======================
+// MongoDB Connection
+// =======================
 console.log("MONGO_URI exists:", !!process.env.MONGO_URI);
 
 mongoose.connect(process.env.MONGO_URI, {
-  serverSelectionTimeoutMS: 5000
+    serverSelectionTimeoutMS: 5000
 })
 .then(() => {
-  console.log("✅ MongoDB Connected");
+    console.log("✅ MongoDB Connected");
+
+    app.listen(PORT, () => {
+        console.log(`🚀 Server running on port ${PORT}`);
+    });
 })
 .catch(err => {
-  console.error("❌ MongoDB Connection Error:");
-  console.error(err);
+    console.error("❌ MongoDB Connection Error");
+    console.error(err);
 });
 
-// Test route
-//app.get('/', (req, res) => {
-   // res.send("Server is running 🚀");
-//});
-
-app.listen(3000, () => {
-    console.log("Server running on port 3000");
-});
-
+// =======================
+// Register
+// =======================
 app.post('/register', async (req, res) => {
-    console.log("Request received:", req.body);
 
     try {
+
         const { username, email, password } = req.body;
 
-        const bcrypt = require('bcryptjs');
-        const User = require('./User');
+        const existingUser = await User.findOne({ email });
+
+        if (existingUser) {
+            return res.status(400).json({
+                message: "Email already registered"
+            });
+        }
 
         const hashedPassword = await bcrypt.hash(password, 10);
 
@@ -53,100 +73,173 @@ app.post('/register', async (req, res) => {
 
         await user.save();
 
-        console.log("User saved");
+        res.json({
+            message: "User registered successfully"
+        });
 
-        res.json({ message: "User registered successfully" });
     } catch (err) {
-        console.log("Error:", err);
-        res.status(500).json({ message: "Error" });
-    }
-});
-app.post('/login', async (req, res) => {
-    try {
-        const { email, password } = req.body;
 
-        const User = require('./User');
-        const bcrypt = require('bcryptjs');
+        console.log(err);
+
+        res.status(500).json({
+            message: "Registration failed"
+        });
+
+    }
+
+});
+
+// =======================
+// Login
+// =======================
+app.post('/login', async (req, res) => {
+
+    try {
+
+        const { email, password } = req.body;
 
         const user = await User.findOne({ email });
 
         if (!user) {
-            return res.status(400).json({ message: "User not found" });
+            return res.status(400).json({
+                message: "User not found"
+            });
         }
 
         const isMatch = await bcrypt.compare(password, user.password);
 
         if (!isMatch) {
-            return res.status(400).json({ message: "Invalid password" });
+            return res.status(400).json({
+                message: "Invalid password"
+            });
         }
 
-        const token = jwt.sign({ id: user._id }, "secretkey");
+        const token = jwt.sign(
+            {
+                id: user._id
+            },
+            JWT_SECRET,
+            {
+                expiresIn: "7d"
+            }
+        );
 
         res.json({
             message: "Login successful",
-            token: token
+            token
         });
 
     } catch (err) {
+
         console.log(err);
-        res.status(500).json({ message: "Error logging in" });
+
+        res.status(500).json({
+            message: "Login failed"
+        });
+
     }
+
 });
 
-const path = require('path');
-
-app.use(express.static('public'));
-const jwt = require('jsonwebtoken');
-const Text = require('./Text');
-
+// =======================
+// Save Session
+// =======================
 app.post('/save', async (req, res) => {
-    try {
-        const token = req.headers['authorization'];
 
-        if (!token) {
-            return res.status(401).json({ message: "Unauthorized" });
+    try {
+
+        const authHeader = req.headers.authorization;
+
+        if (!authHeader) {
+            return res.status(401).json({
+                message: "Unauthorized"
+            });
         }
 
-        // ✅ Decode token
-        const decoded = jwt.verify(token, "secretkey");
+        const token = authHeader.startsWith("Bearer ")
+            ? authHeader.split(" ")[1]
+            : authHeader;
 
-        const { content, startTime, endTime, duration, pasteCount, pastedTextLength} = req.body;
+        const decoded = jwt.verify(token, JWT_SECRET);
 
-        const newSession = new Text({
-            userId: decoded.id,   // 🔥 link to user
+        const {
             content,
             startTime,
             endTime,
             duration,
             pasteCount,
-            pastedTextLength
+            pastedTextLength,
+            totalKeystrokes
+        } = req.body;
+
+        const session = new Text({
+
+            userId: decoded.id,
+            content,
+            startTime,
+            endTime,
+            duration,
+            pasteCount,
+            pastedTextLength,
+            totalKeystrokes
+
         });
 
-        await newSession.save();
+        await session.save();
 
-        res.json({ message: "Session saved with user ✅" });
+        res.json({
+            message: "Session saved successfully"
+        });
 
     } catch (err) {
-        console.log(err);
-        res.status(500).json({ message: "Error saving session" });
-    }
-});
-app.get('/my-sessions', async (req, res) => {
-    try {
-        const token = req.headers['authorization'];
 
-        if (!token) {
-            return res.status(401).json({ message: "Unauthorized" });
+        console.log(err);
+
+        res.status(500).json({
+            message: "Error saving session"
+        });
+
+    }
+
+});
+
+// =======================
+// View Sessions
+// =======================
+app.get('/my-sessions', async (req, res) => {
+
+    try {
+
+        const authHeader = req.headers.authorization;
+
+        if (!authHeader) {
+            return res.status(401).json({
+                message: "Unauthorized"
+            });
         }
 
-        const decoded = jwt.verify(token, "secretkey");
+        const token = authHeader.startsWith("Bearer ")
+            ? authHeader.split(" ")[1]
+            : authHeader;
 
-        const sessions = await Text.find({ userId: decoded.id });
+        const decoded = jwt.verify(token, JWT_SECRET);
+
+        const sessions = await Text.find({
+            userId: decoded.id
+        }).sort({
+            createdAt: -1
+        });
 
         res.json(sessions);
 
     } catch (err) {
+
         console.log(err);
-        res.status(500).json({ message: "Error fetching sessions" });
+
+        res.status(500).json({
+            message: "Error fetching sessions"
+        });
+
     }
+
 });
